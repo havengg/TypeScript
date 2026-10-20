@@ -339,14 +339,10 @@ export const AWorker = 20;
 tsconfig.json::
 SemanticDiagnostics::
 *refresh*    /home/src/workspaces/project/aworker.ts
-*refresh*    /home/src/workspaces/project/c.ts
 *refresh*    /home/src/workspaces/project/b.ts
-*refresh*    /home/src/workspaces/project/file.ts
 Signatures::
 (computed .d.ts) /home/src/workspaces/project/aworker.ts
-(stored at emit) /home/src/workspaces/project/c.ts
 (computed .d.ts) /home/src/workspaces/project/b.ts
-(stored at emit) /home/src/workspaces/project/file.ts
 
 
 Edit [1]:: change aworker and enum value
@@ -507,4 +503,4 @@ Signatures::
 (computed .d.ts) /home/src/workspaces/project/aworker.ts
 (computed .d.ts) /home/src/workspaces/project/c.ts
 (computed .d.ts) /home/src/workspaces/project/b.ts
-(stored at emit) /home/src/workspaces/project/file.ts
+(computed .d.ts) /home/src/workspaces/project/file.ts

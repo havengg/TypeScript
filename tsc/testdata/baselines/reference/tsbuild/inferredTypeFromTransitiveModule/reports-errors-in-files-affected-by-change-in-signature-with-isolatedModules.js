@@ -522,8 +522,8 @@ SemanticDiagnostics::
 *not cached* /home/src/workspaces/project/index.ts
 Signatures::
 (computed .d.ts) /home/src/workspaces/project/bar.ts
-(stored at emit) /home/src/workspaces/project/lazyIndex.ts
-(stored at emit) /home/src/workspaces/project/index.ts
+(computed .d.ts) /home/src/workspaces/project/lazyIndex.ts
+(computed .d.ts) /home/src/workspaces/project/index.ts
 
 
 Edit [1]:: incremental-declaration-changes
@@ -714,8 +714,8 @@ SemanticDiagnostics::
 *not cached* /home/src/workspaces/project/index.ts
 Signatures::
 (computed .d.ts) /home/src/workspaces/project/bar.ts
-(stored at emit) /home/src/workspaces/project/lazyIndex.ts
-(stored at emit) /home/src/workspaces/project/index.ts
+(computed .d.ts) /home/src/workspaces/project/lazyIndex.ts
+(computed .d.ts) /home/src/workspaces/project/index.ts
 
 
 Edit [2]:: incremental-declaration-changes
@@ -906,8 +906,8 @@ SemanticDiagnostics::
 *not cached* /home/src/workspaces/project/index.ts
 Signatures::
 (computed .d.ts) /home/src/workspaces/project/bar.ts
-(stored at emit) /home/src/workspaces/project/lazyIndex.ts
-(stored at emit) /home/src/workspaces/project/index.ts
+(computed .d.ts) /home/src/workspaces/project/lazyIndex.ts
+(computed .d.ts) /home/src/workspaces/project/index.ts
 
 
 Edit [3]:: Fix Error

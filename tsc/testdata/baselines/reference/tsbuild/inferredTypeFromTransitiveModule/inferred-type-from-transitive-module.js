@@ -521,7 +521,7 @@ SemanticDiagnostics::
 Signatures::
 (computed .d.ts) /home/src/workspaces/project/bar.ts
 (computed .d.ts) /home/src/workspaces/project/lazyIndex.ts
-(stored at emit) /home/src/workspaces/project/index.ts
+(computed .d.ts) /home/src/workspaces/project/index.ts
 
 
 Edit [1]:: incremental-declaration-changes
@@ -714,4 +714,4 @@ SemanticDiagnostics::
 Signatures::
 (computed .d.ts) /home/src/workspaces/project/bar.ts
 (computed .d.ts) /home/src/workspaces/project/lazyIndex.ts
-(stored at emit) /home/src/workspaces/project/index.ts
+(computed .d.ts) /home/src/workspaces/project/index.ts

@@ -22,9 +22,10 @@ func (c dtsMayChange) addFileToAffectedFilesPendingEmit(filePath tspath.PathKey,
 }
 
 type updatedSignature struct {
-	mu        sync.Mutex
-	signature string
-	kind      SignatureUpdateKind
+	mu         sync.Mutex
+	signature  string
+	kind       SignatureUpdateKind
+	references *collections.Set[tspath.PathKey]
 }
 
 type affectedFilesHandler struct {
@@ -36,6 +37,10 @@ type affectedFilesHandler struct {
 	filesToRemoveDiagnostics               collections.SyncSet[tspath.PathKey]
 	cleanedDiagnosticsOfLibFiles           sync.Once
 	seenFileAndReferences                  collections.SyncMap[tspath.PathKey, bool]
+	walkedFiles                            collections.SyncSet[tspath.PathKey]
+	proportionalRoots                      collections.SyncSet[tspath.PathKey]
+	referenceIndexOnce                     sync.Once
+	referenceIndex                         *declarationReferenceIndex
 }
 
 func (h *affectedFilesHandler) getDtsMayChange(affectedFilePath tspath.PathKey, affectedFileEmitKind FileEmitKind) dtsMayChange {
@@ -66,7 +71,7 @@ func (h *affectedFilesHandler) removeDiagnosticsOfLibraryFiles() {
 	})
 }
 
-func (h *affectedFilesHandler) computeDtsSignature(file *ast.SourceFile) string {
+func (h *affectedFilesHandler) computeDtsSignature(file *ast.SourceFile, update *updatedSignature) string {
 	var signature string
 	done := h.program.beginNestedEmit()
 	defer done()
@@ -78,6 +83,9 @@ func (h *affectedFilesHandler) computeDtsSignature(file *ast.SourceFile) string 
 				panic("File extension for signature expected to be dts, got : " + fileName.AsString())
 			}
 			signature = h.program.snapshot.computeSignatureWithDiagnostics(file, text, data)
+			if !h.hasAllFilesExcludingDefaultLibraryFile.Load() {
+				update.references = h.declarationReferences(file, fileName, text)
+			}
 			return nil
 		},
 	})
@@ -101,7 +109,10 @@ func (h *affectedFilesHandler) updateShapeSignature(file *ast.SourceFile, useFil
 	// JSON files have no declaration output from which to compute a shape
 	// signature, so use the file version to conservatively invalidate dependents.
 	if !file.IsDeclarationFile && !ast.IsJsonSourceFile(file) && !useFileVersionAsSignature {
-		update.signature = h.computeDtsSignature(file)
+		update.signature = h.computeDtsSignature(file, update)
+	}
+	if file.IsDeclarationFile && !useFileVersionAsSignature && !h.hasAllFilesExcludingDefaultLibraryFile.Load() {
+		update.references = h.declarationReferences(file, file.FileName(), file.Text())
 	}
 	// Default is to use file version as signature
 	if update.signature == "" {
@@ -204,26 +215,9 @@ func (h *affectedFilesHandler) handleDtsMayChangeOfAffectedFile(dtsMayChange dts
 		return
 	}
 
+	h.walkedFiles.Add(affectedFile.PathKey())
 	// At this point affectedFile is actually one of the changed files
 	// that has some change in its .d.ts signature.
-
-	// Since isolated modules dont change js files, files affected by change in signature is itself
-	// But we need to cleanup semantic diagnostics and queue dts emit for affected files
-	if h.program.snapshot.options.IsolatedModules.IsTrue() {
-		h.forEachFileReferencedBy(
-			affectedFile,
-			func(currentFile *ast.SourceFile, currentPath tspath.PathKey) (queueForFile bool, fastReturn bool) {
-				if h.handleDtsMayChangeOfGlobalScope(dtsMayChange, currentPath /*invalidateJsFiles*/, false) {
-					return false, true
-				}
-				h.handleDtsMayChangeOf(dtsMayChange, currentPath /*invalidateJsFiles*/, false)
-				if h.isChangedSignature(currentPath) {
-					return true, false
-				}
-				return false, false
-			},
-		)
-	}
 
 	invalidateJsFiles := false
 	var typeChecker *checker.Checker
@@ -256,8 +250,32 @@ func (h *affectedFilesHandler) handleDtsMayChangeOfAffectedFile(dtsMayChange dts
 		done()
 	}
 
+	if !invalidateJsFiles {
+		h.proportionalRoots.Add(affectedFile.PathKey())
+		return
+	}
+
+	// Since isolated modules dont change js files, files affected by change in signature is itself
+	// But we need to cleanup semantic diagnostics and queue dts emit for affected files
+	if h.program.snapshot.options.IsolatedModules.IsTrue() {
+		h.forEachFileReferencedBy(
+			affectedFile,
+			func(currentFile *ast.SourceFile, currentPath tspath.PathKey) (queueForFile bool, fastReturn bool) {
+				if h.handleDtsMayChangeOfGlobalScope(dtsMayChange, currentPath /*invalidateJsFiles*/, false) {
+					return false, true
+				}
+				h.handleDtsMayChangeOf(dtsMayChange, currentPath /*invalidateJsFiles*/, false)
+				if h.isChangedSignature(currentPath) {
+					return true, false
+				}
+				return false, false
+			},
+		)
+	}
+
 	// Go through files that reference affected file and handle dts emit and semantic diagnostics for them and their references
 	for fileReferencingChangedFile := range h.program.snapshot.referencedMap.getReferencedBy(affectedFile.PathKey()) {
+		h.walkedFiles.Add(fileReferencingChangedFile)
 		if h.handleDtsMayChangeOfGlobalScope(dtsMayChange, fileReferencingChangedFile, invalidateJsFiles) {
 			return
 		}
@@ -272,6 +290,7 @@ func (h *affectedFilesHandler) handleDtsMayChangeOfAffectedFile(dtsMayChange dts
 }
 
 func (h *affectedFilesHandler) handleDtsMayChangeOfFileAndReferences(dtsMayChange dtsMayChange, filePath tspath.PathKey, invalidateJsFiles bool) bool {
+	h.walkedFiles.Add(filePath)
 	if existing, loaded := h.seenFileAndReferences.LoadOrStore(filePath, invalidateJsFiles); loaded && (existing || !invalidateJsFiles) {
 		return false
 	} else if loaded && invalidateJsFiles {
@@ -391,6 +410,8 @@ func collectAllAffectedFiles(ctx context.Context, program *Program) {
 		return true
 	})
 	wg.RunAndWait()
+
+	handler.walkDeclarationReferences()
 
 	// Update the snapshot with the new state
 	handler.updateSnapshot()
