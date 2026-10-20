@@ -12,6 +12,7 @@ import (
 	"github.com/microsoft/TypeScript/tsc/internal/collections"
 	"github.com/microsoft/TypeScript/tsc/internal/compiler"
 	"github.com/microsoft/TypeScript/tsc/internal/core"
+	"github.com/microsoft/TypeScript/tsc/internal/tracing"
 	"github.com/microsoft/TypeScript/tsc/internal/tspath"
 )
 
@@ -38,9 +39,11 @@ type affectedFilesHandler struct {
 	cleanedDiagnosticsOfLibFiles           sync.Once
 	seenFileAndReferences                  collections.SyncMap[tspath.PathKey, bool]
 	walkedFiles                            collections.SyncSet[tspath.PathKey]
+	recomputedSignatures                   collections.SyncSet[tspath.PathKey]
 	proportionalRoots                      collections.SyncSet[tspath.PathKey]
 	referenceIndexOnce                     sync.Once
 	referenceIndex                         *declarationReferenceIndex
+	globalScopeTriggers                    collections.SyncSet[tspath.PathKey]
 }
 
 func (h *affectedFilesHandler) getDtsMayChange(affectedFilePath tspath.PathKey, affectedFileEmitKind FileEmitKind) dtsMayChange {
@@ -72,6 +75,7 @@ func (h *affectedFilesHandler) removeDiagnosticsOfLibraryFiles() {
 }
 
 func (h *affectedFilesHandler) computeDtsSignature(file *ast.SourceFile, update *updatedSignature) string {
+	h.recomputedSignatures.Add(file.PathKey())
 	var signature string
 	done := h.program.beginNestedEmit()
 	defer done()
@@ -133,6 +137,7 @@ func (h *affectedFilesHandler) getFilesAffectedBy(path tspath.PathKey) []*ast.So
 	}
 
 	if info, _ := h.program.snapshot.fileInfos.Load(file.PathKey()); info.affectsGlobalScope {
+		h.globalScopeTriggers.Add(file.PathKey())
 		h.hasAllFilesExcludingDefaultLibraryFile.Store(true)
 		return h.program.snapshot.getAllFilesExcludingDefaultLibraryFile(h.program.program, file)
 	}
@@ -215,7 +220,7 @@ func (h *affectedFilesHandler) handleDtsMayChangeOfAffectedFile(dtsMayChange dts
 		return
 	}
 
-	h.walkedFiles.Add(affectedFile.PathKey())
+	h.markWalkedFile(affectedFile.PathKey())
 	// At this point affectedFile is actually one of the changed files
 	// that has some change in its .d.ts signature.
 
@@ -275,7 +280,7 @@ func (h *affectedFilesHandler) handleDtsMayChangeOfAffectedFile(dtsMayChange dts
 
 	// Go through files that reference affected file and handle dts emit and semantic diagnostics for them and their references
 	for fileReferencingChangedFile := range h.program.snapshot.referencedMap.getReferencedBy(affectedFile.PathKey()) {
-		h.walkedFiles.Add(fileReferencingChangedFile)
+		h.markWalkedFile(fileReferencingChangedFile)
 		if h.handleDtsMayChangeOfGlobalScope(dtsMayChange, fileReferencingChangedFile, invalidateJsFiles) {
 			return
 		}
@@ -290,7 +295,7 @@ func (h *affectedFilesHandler) handleDtsMayChangeOfAffectedFile(dtsMayChange dts
 }
 
 func (h *affectedFilesHandler) handleDtsMayChangeOfFileAndReferences(dtsMayChange dtsMayChange, filePath tspath.PathKey, invalidateJsFiles bool) bool {
-	h.walkedFiles.Add(filePath)
+	h.markWalkedFile(filePath)
 	if existing, loaded := h.seenFileAndReferences.LoadOrStore(filePath, invalidateJsFiles); loaded && (existing || !invalidateJsFiles) {
 		return false
 	} else if loaded && invalidateJsFiles {
@@ -316,6 +321,7 @@ func (h *affectedFilesHandler) handleDtsMayChangeOfGlobalScope(dtsMayChange dtsM
 	if info, ok := h.program.snapshot.fileInfos.Load(filePath); !ok || !info.affectsGlobalScope {
 		return false
 	}
+	h.globalScopeTriggers.Add(filePath)
 	// Every file needs to be handled
 	for _, file := range h.program.snapshot.getAllFilesExcludingDefaultLibraryFile(h.program.program, nil) {
 		h.handleDtsMayChangeOf(dtsMayChange, file.PathKey(), invalidateJsFiles)
@@ -413,6 +419,18 @@ func collectAllAffectedFiles(ctx context.Context, program *Program) {
 
 	handler.walkDeclarationReferences()
 
+	program.affectedWalkGlobalScopes = handler.globalScopeTriggers.ToSlice()
+	slices.Sort(program.affectedWalkGlobalScopes)
+	program.affectedWalkFiles = handler.walkedFiles.Size()
+	program.recomputedSignatures = handler.recomputedSignatures.Size()
 	// Update the snapshot with the new state
 	handler.updateSnapshot()
+}
+
+func (h *affectedFilesHandler) markWalkedFile(path tspath.PathKey) {
+	if h.walkedFiles.AddIfAbsent(path) {
+		if tr := h.program.program.Tracing(); tr != nil {
+			tr.Instant(tracing.PhaseCheck, "affectedDeclarationWalk", map[string]any{"path": string(path)})
+		}
+	}
 }

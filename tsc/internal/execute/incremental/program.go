@@ -28,9 +28,12 @@ const (
 )
 
 type Program struct {
-	snapshot *snapshot
-	program  *compiler.Program
-	host     Host
+	affectedWalkFiles        int
+	affectedWalkGlobalScopes []tspath.PathKey
+	recomputedSignatures     int
+	snapshot                 *snapshot
+	program                  *compiler.Program
+	host                     Host
 
 	// Testing data
 	testingData *TestingData
@@ -501,4 +504,14 @@ func (p *Program) PackageJsonLookupPaths() []tspath.RootedFilePath {
 	})
 	slices.Sort(packageJsons)
 	return core.Deduplicate(packageJsons)
+}
+
+// AffectedWalkStatistics counts distinct files in the second-phase walk (including changed roots)
+// and files whose declaration signatures were emitted again in either affected-file phase.
+func (p *Program) AffectedWalkStatistics() (int, int) {
+	return p.affectedWalkFiles, p.recomputedSignatures
+}
+
+func (p *Program) AffectedWalkGlobalScopes() []string {
+	return core.Map(p.affectedWalkGlobalScopes, func(path tspath.PathKey) string { return string(path) })
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/microsoft/TypeScript/tsc/internal/module"
 	"github.com/microsoft/TypeScript/tsc/internal/outputpaths"
 	"github.com/microsoft/TypeScript/tsc/internal/parser"
+	"github.com/microsoft/TypeScript/tsc/internal/tracing"
 	"github.com/microsoft/TypeScript/tsc/internal/tspath"
 )
 
@@ -208,7 +209,7 @@ func (h *affectedFilesHandler) walkDeclarationReferences() {
 	slices.Sort(roots)
 	for _, path := range roots {
 		visited.Add(path)
-		h.walkedFiles.Add(path)
+		h.markWalkedFile(path)
 		expand(path)
 	}
 	for len(queue) > 0 && h.ctx.Err() == nil {
@@ -221,12 +222,15 @@ func (h *affectedFilesHandler) walkDeclarationReferences() {
 		if file == nil {
 			continue
 		}
-		h.walkedFiles.Add(path)
+		h.markWalkedFile(path)
 		for waiter := range waiting[path].Keys() {
 			expand(waiter)
 		}
 		delete(waiting, path)
 		if h.handleDtsMayChangeOfGlobalScope(pending, path, false) {
+			if tr := h.program.program.Tracing(); tr != nil {
+				tr.Instant(tracing.PhaseCheck, "affectedDeclarationGlobalScope", map[string]any{"path": string(path)})
+			}
 			return
 		}
 		h.updateShapeSignature(file, false)

@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/microsoft/TypeScript/tsc/internal/compiler"
@@ -54,23 +55,27 @@ func identifierCount(p *compiler.Program) int {
 }
 
 type Statistics struct {
-	isAggregate      bool
-	Projects         int
-	ProjectsBuilt    int
-	TimestampUpdates int
-	files            int
-	lines            int
-	identifiers      int
-	symbols          int
-	types            int
-	instantiations   int
-	memoryUsed       uint64
-	memoryAllocs     uint64
-	compileTimes     *CompileTimes
+	reportAffectedWalk       bool
+	affectedWalkGlobalScopes []string
+	affectedWalkFiles        int
+	recomputedSignatures     int
+	isAggregate              bool
+	Projects                 int
+	ProjectsBuilt            int
+	TimestampUpdates         int
+	files                    int
+	lines                    int
+	identifiers              int
+	symbols                  int
+	types                    int
+	instantiations           int
+	memoryUsed               uint64
+	memoryAllocs             uint64
+	compileTimes             *CompileTimes
 }
 
 func statisticsFromProgram(input EmitInput, memStats *runtime.MemStats) *Statistics {
-	return &Statistics{
+	s := &Statistics{
 		files:          len(input.Program.SourceFiles()),
 		lines:          input.Program.LineCount(),
 		identifiers:    input.Program.IdentifierCount(),
@@ -81,6 +86,14 @@ func statisticsFromProgram(input EmitInput, memStats *runtime.MemStats) *Statist
 		memoryAllocs:   memStats.Mallocs,
 		compileTimes:   input.CompileTimes,
 	}
+	s.reportAffectedWalk = input.Config.CompilerOptions().ExtendedDiagnostics.IsTrue()
+	if p, ok := input.ProgramLike.(interface{ AffectedWalkStatistics() (int, int) }); ok {
+		s.affectedWalkFiles, s.recomputedSignatures = p.AffectedWalkStatistics()
+	}
+	if p, ok := input.ProgramLike.(interface{ AffectedWalkGlobalScopes() []string }); ok {
+		s.affectedWalkGlobalScopes = p.AffectedWalkGlobalScopes()
+	}
+	return s
 }
 
 func (s *Statistics) Report(w io.Writer, testing CommandLineTesting) {
@@ -103,6 +116,13 @@ func (s *Statistics) Report(w io.Writer, testing CommandLineTesting) {
 	table.add(prefix+"Symbols", s.symbols)
 	table.add(prefix+"Types", s.types)
 	table.add(prefix+"Instantiations", s.instantiations)
+	if s.reportAffectedWalk {
+		value := fmt.Sprintf("%d files, %d signatures recomputed", s.affectedWalkFiles, s.recomputedSignatures)
+		if len(s.affectedWalkGlobalScopes) != 0 {
+			value += " (global scope: " + strings.Join(s.affectedWalkGlobalScopes, ", ") + ")"
+		}
+		table.add(prefix+"Affected walk", value)
+	}
 	table.add(prefix+"Memory used", fmt.Sprintf("%vK", s.memoryUsed/1024))
 	table.add(prefix+"Memory allocs", strconv.FormatUint(s.memoryAllocs, 10))
 	if s.compileTimes.ConfigTime != 0 {
@@ -164,6 +184,9 @@ func (s *Statistics) Aggregate(stat *Statistics) {
 	s.symbols += stat.symbols
 	s.types += stat.types
 	s.instantiations += stat.instantiations
+	s.reportAffectedWalk = s.reportAffectedWalk || stat.reportAffectedWalk
+	s.affectedWalkFiles += stat.affectedWalkFiles
+	s.recomputedSignatures += stat.recomputedSignatures
 	s.memoryUsed += stat.memoryUsed
 	s.memoryAllocs += stat.memoryAllocs
 	s.compileTimes.ConfigTime += stat.compileTimes.ConfigTime
