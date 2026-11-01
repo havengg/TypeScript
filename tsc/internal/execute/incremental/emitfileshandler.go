@@ -205,6 +205,7 @@ func (h *emitFilesHandler) getEmitOptions(options compiler.EmitOptions) compiler
 		WriteFile: func(fileName tspath.RootedFilePath, text string, data *compiler.WriteFileData) error {
 			var differsOnlyInMap bool
 			if fileName.IsDeclarationFile() {
+				h.program.recordSymbolMetadata(data.SourceFile, fileName, text)
 				if canUseIncrementalState {
 					var emitSignature string
 					info, _ := h.program.snapshot.fileInfos.Load(data.SourceFile.PathKey())

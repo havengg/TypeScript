@@ -58,6 +58,8 @@ type Statistics struct {
 	reportAffectedWalk       bool
 	affectedWalkGlobalScopes []string
 	affectedWalkFiles        int
+	filesRechecked           int
+	exportsMeaningChanged    int
 	recomputedSignatures     int
 	isAggregate              bool
 	Projects                 int
@@ -85,6 +87,9 @@ func statisticsFromProgram(input EmitInput, memStats *runtime.MemStats) *Statist
 		memoryUsed:     memStats.Alloc,
 		memoryAllocs:   memStats.Mallocs,
 		compileTimes:   input.CompileTimes,
+	}
+	if p, ok := input.ProgramLike.(interface{ SymbolWalkStatistics() (int, int) }); ok {
+		s.filesRechecked, s.exportsMeaningChanged = p.SymbolWalkStatistics()
 	}
 	s.reportAffectedWalk = input.Config.CompilerOptions().ExtendedDiagnostics.IsTrue()
 	if p, ok := input.ProgramLike.(interface{ AffectedWalkStatistics() (int, int) }); ok {
@@ -122,6 +127,8 @@ func (s *Statistics) Report(w io.Writer, testing CommandLineTesting) {
 			value += " (global scope: " + strings.Join(s.affectedWalkGlobalScopes, ", ") + ")"
 		}
 		table.add(prefix+"Affected walk", value)
+		table.add(prefix+"Files rechecked", s.filesRechecked)
+		table.add(prefix+"Exports meaning-changed", s.exportsMeaningChanged)
 	}
 	table.add(prefix+"Memory used", fmt.Sprintf("%vK", s.memoryUsed/1024))
 	table.add(prefix+"Memory allocs", strconv.FormatUint(s.memoryAllocs, 10))
@@ -186,6 +193,8 @@ func (s *Statistics) Aggregate(stat *Statistics) {
 	s.instantiations += stat.instantiations
 	s.reportAffectedWalk = s.reportAffectedWalk || stat.reportAffectedWalk
 	s.affectedWalkFiles += stat.affectedWalkFiles
+	s.filesRechecked += stat.filesRechecked
+	s.exportsMeaningChanged += stat.exportsMeaningChanged
 	s.recomputedSignatures += stat.recomputedSignatures
 	s.memoryUsed += stat.memoryUsed
 	s.memoryAllocs += stat.memoryAllocs

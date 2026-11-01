@@ -304,6 +304,7 @@ func (d *DiagnosticsOrBuildInfoDiagnosticsWithFileName) getDiagnostics(p *compil
 }
 
 type snapshot struct {
+	symbolMetadata collections.SyncMap[tspath.PathKey, *SymbolMetadata]
 	// These are the fields that get serialized
 
 	// Information of the file eg. its version, signature etc

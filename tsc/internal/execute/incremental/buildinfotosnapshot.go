@@ -26,6 +26,14 @@ func buildInfoToSnapshot(buildInfo *BuildInfo, config *tsoptions.ParsedCommandLi
 		}
 		return fileSet
 	})
+	if SymbolGrainEnabled() {
+		for relative, metadata := range buildInfo.SymbolMetadata {
+			absolute := func(path string) string {
+				return string(config.CaseSensitivity().PathKey(tspath.RootedPath(to.buildInfoDirectory.ResolveFile(path))))
+			}
+			to.snapshot.symbolMetadata.Store(tspath.PathKey(absolute(relative)), mapSymbolMetadataPaths(metadata, absolute))
+		}
+	}
 	to.setCompilerOptions()
 	to.setFileInfoAndEmitSignatures()
 	to.setReferencedMap()

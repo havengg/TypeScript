@@ -21,6 +21,7 @@ func snapshotToBuildInfo(snapshot *snapshot, program *compiler.Program, buildInf
 	}
 	buildInfo := &BuildInfo{
 		Version:                 core.Version(),
+		SymbolGrainFormat:       symbolGrainFormat(),
 		ContentMapperIdentities: contentMapperIdentities,
 	}
 	to := &toBuildInfo{
@@ -34,6 +35,16 @@ func snapshotToBuildInfo(snapshot *snapshot, program *compiler.Program, buildInf
 		roots:                   make(map[*ast.SourceFile]tspath.PathKey),
 	}
 
+	if SymbolGrainEnabled() {
+		buildInfo.SymbolMetadata = map[string]*SymbolMetadata{}
+		snapshot.symbolMetadata.Range(func(file tspath.PathKey, value *SymbolMetadata) bool {
+			if program.GetSourceFileByPath(file) != nil {
+				relative := func(path string) string { return to.relativeToBuildInfo(tspath.RootedPath(path)) }
+				buildInfo.SymbolMetadata[relative(string(file))] = mapSymbolMetadataPaths(value, relative)
+			}
+			return true
+		})
+	}
 	if snapshot.options.IsIncremental() {
 		to.collectRootFiles()
 		to.setFileInfoAndEmitSignatures()

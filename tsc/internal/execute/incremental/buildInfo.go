@@ -471,7 +471,9 @@ func (b *BuildInfoResolvedRoot) UnmarshalJSON(data []byte) error {
 }
 
 type BuildInfo struct {
-	Version string `json:"version,omitzero"`
+	SymbolGrainFormat int                        `json:"symbolGrainFormat,omitzero"`
+	SymbolMetadata    map[string]*SymbolMetadata `json:"symbolMetadata,omitzero"`
+	Version           string                     `json:"version,omitzero"`
 
 	// Common between incremental and tsc -b buildinfo for non incremental programs
 	Errors                  bool             `json:"errors,omitzero"`
@@ -500,7 +502,7 @@ type BuildInfo struct {
 }
 
 func (b *BuildInfo) IsValidVersion() bool {
-	return b.Version == core.Version()
+	return b.Version == core.Version() && b.SymbolGrainFormat == symbolGrainFormat()
 }
 
 // ContentMapperIdentities returns the project's sorted mapper transform identities. A nil project means

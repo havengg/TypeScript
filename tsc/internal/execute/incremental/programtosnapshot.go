@@ -48,6 +48,7 @@ type toProgramSnapshot struct {
 
 func (t *toProgramSnapshot) reuseFromOldProgram() {
 	if t.oldProgram != nil {
+		t.snapshot.copySymbolMetadata(t.oldProgram.snapshot)
 		if t.snapshot.options.Composite.IsTrue() {
 			t.snapshot.latestChangedDtsFile = t.oldProgram.snapshot.latestChangedDtsFile
 		}

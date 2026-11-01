@@ -28,6 +28,11 @@ const (
 )
 
 type Program struct {
+	symbolIndexOnce          sync.Once
+	symbolIndexHandler       *affectedFilesHandler
+	symbolRechecked          collections.SyncSet[tspath.PathKey]
+	symbolMeaningChanged     int
+	symbolFallback           string
 	affectedWalkFiles        int
 	affectedWalkGlobalScopes []tspath.PathKey
 	recomputedSignatures     int
@@ -305,6 +310,7 @@ func (p *Program) collectSemanticDiagnosticsOfAffectedFiles(ctx context.Context,
 	}
 
 	// Get their diagnostics and cache them
+	p.recordSymbolRechecks(affectedFiles)
 	diagnosticsPerFile := p.program.GetSemanticDiagnosticsForIncremental(ctx, affectedFiles)
 	// commit changes if no err
 	if ctx.Err() != nil {
@@ -351,6 +357,7 @@ func (p *Program) emitBuildInfo(ctx context.Context, options compiler.EmitOption
 	if ctx.Err() != nil {
 		return nil
 	}
+	p.ensureSymbolMetadata(ctx)
 	buildInfo, err := snapshotToBuildInfo(p.snapshot, p.program, buildInfoFileName)
 	if err != nil {
 		return &compiler.EmitResult{

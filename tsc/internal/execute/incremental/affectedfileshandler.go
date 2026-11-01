@@ -87,6 +87,7 @@ func (h *affectedFilesHandler) computeDtsSignature(file *ast.SourceFile, update 
 				panic("File extension for signature expected to be dts, got : " + fileName.AsString())
 			}
 			signature = h.program.snapshot.computeSignatureWithDiagnostics(file, text, data)
+			h.program.recordSymbolMetadata(file, fileName, text)
 			if !h.hasAllFilesExcludingDefaultLibraryFile.Load() {
 				update.references = h.declarationReferences(file, fileName, text)
 			}
@@ -116,6 +117,7 @@ func (h *affectedFilesHandler) updateShapeSignature(file *ast.SourceFile, useFil
 		update.signature = h.computeDtsSignature(file, update)
 	}
 	if file.IsDeclarationFile && !useFileVersionAsSignature && !h.hasAllFilesExcludingDefaultLibraryFile.Load() {
+		h.program.recordSymbolMetadata(file, file.FileName(), file.Text())
 		update.references = h.declarationReferences(file, file.FileName(), file.Text())
 	}
 	// Default is to use file version as signature
@@ -386,6 +388,9 @@ func collectAllAffectedFiles(ctx context.Context, program *Program) {
 		return
 	}
 
+	if trySymbolGrainWalk(ctx, program) {
+		return
+	}
 	handler := affectedFilesHandler{ctx: ctx, program: program}
 	wg := core.NewWorkGroup(handler.program.program.SingleThreaded())
 	var result collections.SyncSet[*ast.SourceFile]
