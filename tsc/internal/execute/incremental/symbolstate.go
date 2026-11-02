@@ -2,20 +2,23 @@ package incremental
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"slices"
 	"strings"
 
 	"github.com/microsoft/TypeScript/tsc/internal/ast"
+	"github.com/microsoft/TypeScript/tsc/internal/json"
 	"github.com/microsoft/TypeScript/tsc/internal/module"
 	"github.com/microsoft/TypeScript/tsc/internal/tspath"
 )
 
-const SymbolGrainFormatVersion = 3
+const SymbolGrainFormatVersion = 5
 
 // This research option never changes the manifest's default compiler behavior.
+//
+//nolint:forbidigo // The walk switch is explicitly a process-level option, not a program host input.
 func SymbolGrainEnabled() bool { return os.Getenv("TS_SYMBOL_GRAIN") == "1" }
+
 func symbolGrainFormat() int {
 	if SymbolGrainEnabled() {
 		return SymbolGrainFormatVersion
@@ -139,7 +142,6 @@ func (p *Program) ensureSymbolMetadata(ctx context.Context) {
 		}
 		return true
 	})
-
 }
 
 // Rewrite every path in a metadata value without mutating shared snapshots.
@@ -172,6 +174,8 @@ func mapSymbolMetadataPaths(value *SymbolMetadata, mapPath func(string) string) 
 func (p *Program) SymbolWalkStatistics() (int, int) {
 	return p.symbolRechecked.Size(), p.symbolMeaningChanged
 }
+
+//nolint:forbidigo // The optional measurement trace targets the process filesystem, not the program's virtual host.
 func (p *Program) recordSymbolRechecks(files []*ast.SourceFile) {
 	for _, file := range files {
 		if !p.program.SkipTypeChecking(file, false) {
@@ -188,7 +192,7 @@ func (p *Program) recordSymbolRechecks(files []*ast.SourceFile) {
 			Fallback       string           `json:"fallback,omitempty"`
 		}{p.Options().ConfigFilePath.AsString(), names, p.symbolMeaningChanged, p.symbolFallback}
 		data, _ := json.Marshal(record)
-		if stream, err := os.OpenFile(destination, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600); err == nil {
+		if stream, err := os.OpenFile(destination, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600); err == nil {
 			_, _ = stream.Write(append(data, '\n'))
 			_ = stream.Close()
 		}

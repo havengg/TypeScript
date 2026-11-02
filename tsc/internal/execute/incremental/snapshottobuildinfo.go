@@ -39,7 +39,7 @@ func snapshotToBuildInfo(snapshot *snapshot, program *compiler.Program, buildInf
 		buildInfo.SymbolMetadata = map[string]*SymbolMetadata{}
 		snapshot.symbolMetadata.Range(func(file tspath.PathKey, value *SymbolMetadata) bool {
 			if program.GetSourceFileByPath(file) != nil {
-				relative := func(path string) string { return to.relativeToBuildInfo(tspath.RootedPath(path)) }
+				relative := func(path string) string { return to.relativeToBuildInfo(tspath.RootedPathFromNormalized(path)) }
 				buildInfo.SymbolMetadata[relative(string(file))] = mapSymbolMetadataPaths(value, relative)
 			}
 			return true

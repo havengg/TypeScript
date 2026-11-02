@@ -62,6 +62,7 @@ func resolveSymbolExports(metadata map[string]*SymbolMetadata) symbolExportState
 	}
 	return state
 }
+
 func symbolReferenceSetsEqual(a, b []SymbolReference) bool {
 	if len(a) != len(b) {
 		return false
@@ -73,6 +74,7 @@ func symbolReferenceSetsEqual(a, b []SymbolReference) bool {
 	}
 	return true
 }
+
 func (p *Program) symbolWalkHasConstEnum(file *ast.SourceFile) bool {
 	if file.Symbol == nil {
 		return false
@@ -153,8 +155,8 @@ func trySymbolGrainWalk(ctx context.Context, p *Program) bool {
 		files[name] = file
 		imports[name] = CollectNamedImports(file, p.symbolResolver(file, file.FileName()))
 	}
-	for name := range files {
-		if previous[name] == nil && !p.snapshot.changedFilesSet.Has(tspath.PathKey(name)) {
+	for name, file := range files {
+		if previous[name] == nil && !p.snapshot.changedFilesSet.Has(file.PathKey()) {
 			p.symbolFallback = "incomplete-symbol-cache:" + name
 			return false
 		}
@@ -292,11 +294,8 @@ func trySymbolGrainWalk(ctx context.Context, p *Program) bool {
 				if !symbolReferenceSetsEqual(refs, baseline.aliases[file][name]) {
 					more = mark(file, name) || more
 				}
-				for _, ref := range refs {
-					if touched(ref) {
-						more = mark(file, name) || more
-						break
-					}
+				if slices.ContainsFunc(refs, touched) {
+					more = mark(file, name) || more
 				}
 			}
 			for name := range baseline.aliases[file] {
@@ -305,11 +304,8 @@ func trySymbolGrainWalk(ctx context.Context, p *Program) bool {
 				}
 			}
 			for name, refs := range value.Dependencies {
-				for _, ref := range refs {
-					if touched(ref) {
-						more = mark(file, name) || more
-						break
-					}
+				if slices.ContainsFunc(refs, touched) {
+					more = mark(file, name) || more
 				}
 			}
 		}
@@ -320,11 +316,8 @@ func trySymbolGrainWalk(ctx context.Context, p *Program) bool {
 			if affected[file] {
 				continue
 			}
-			for _, ref := range imports[file] {
-				if touched(ref) {
-					more = affect(file) || more
-					break
-				}
+			if slices.ContainsFunc(imports[file], touched) {
+				more = affect(file) || more
 			}
 		}
 	}

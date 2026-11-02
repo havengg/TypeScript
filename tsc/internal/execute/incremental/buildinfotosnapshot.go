@@ -31,7 +31,7 @@ func buildInfoToSnapshot(buildInfo *BuildInfo, config *tsoptions.ParsedCommandLi
 			absolute := func(path string) string {
 				return string(config.CaseSensitivity().PathKey(tspath.RootedPath(to.buildInfoDirectory.ResolveFile(path))))
 			}
-			to.snapshot.symbolMetadata.Store(tspath.PathKey(absolute(relative)), mapSymbolMetadataPaths(metadata, absolute))
+			to.snapshot.symbolMetadata.Store(tspath.PathKeyFromCanonical(absolute(relative)), mapSymbolMetadataPaths(metadata, absolute))
 		}
 	}
 	to.setCompilerOptions()

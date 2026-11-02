@@ -135,6 +135,7 @@ func symbolUniqueStrings(values []string) []string {
 	result = slices.Compact(result)
 	return slices.DeleteFunc(result, func(s string) bool { return s == "" })
 }
+
 func symbolUniqueRefs(refs []SymbolReference) []SymbolReference {
 	result := append([]SymbolReference{}, refs...)
 	slices.SortFunc(result, func(a, b SymbolReference) int {
@@ -145,11 +146,14 @@ func symbolUniqueRefs(refs []SymbolReference) []SymbolReference {
 	})
 	return slices.Compact(result)
 }
+
 func symbolHash(text string) string {
 	sum := sha256.Sum256([]byte(text))
 	return hex.EncodeToString(sum[:])
 }
+
 func symbolExported(node *ast.Node) bool { return node.ModifierFlags()&ast.ModifierFlagsExport != 0 }
+
 func symbolEntityRoot(node *ast.Node) (*ast.Node, string) {
 	first := ""
 	for node != nil && ast.IsQualifiedName(node) {
@@ -158,6 +162,7 @@ func symbolEntityRoot(node *ast.Node) (*ast.Node, string) {
 	}
 	return node, first
 }
+
 func symbolBindingNames(node *ast.Node) []string {
 	if node == nil {
 		return nil
@@ -175,6 +180,7 @@ func symbolBindingNames(node *ast.Node) []string {
 	}
 	return names
 }
+
 func symbolStatementNames(node *ast.Node) []string {
 	if ast.IsImportDeclaration(node) {
 		d := node.AsImportDeclaration()
@@ -209,6 +215,7 @@ func symbolStatementNames(node *ast.Node) []string {
 	}
 	return nil
 }
+
 func symbolDeclarationIdentifier(node *ast.Node) bool {
 	parent := node.Parent
 	if parent == nil {
@@ -261,9 +268,11 @@ func symbolReferenceMeaning(node *ast.Node) ast.SymbolFlags {
 	}
 	return ast.SymbolFlagsValue
 }
+
 func symbolHasMeaning(symbol *ast.Symbol, meaning ast.SymbolFlags) bool {
 	return symbol != nil && symbol.CombinedLocalAndExportSymbolFlags()&(meaning|ast.SymbolFlagsAlias) != 0
 }
+
 func (p *symbolMetadataParser) boundToModule(node *ast.Node) bool {
 	key := node.Text()
 	module := p.file.AsNode().Locals()[key]
@@ -425,6 +434,7 @@ func CollectNamedImports(sourceFile *ast.SourceFile, resolve SymbolResolver) []S
 	refs, _ := CollectNamedImportsWithDiagnostics(sourceFile, resolve)
 	return refs
 }
+
 func CollectNamedImportsWithDiagnostics(sourceFile *ast.SourceFile, resolve SymbolResolver) ([]SymbolReference, []string) {
 	p := newSymbolMetadataParser(sourceFile, sourceFile.FileName().AsString(), resolve)
 	refs := p.references(sourceFile.Statements.Nodes, true)
@@ -516,7 +526,7 @@ func (p *symbolMetadataParser) moduleEffects(metadata *SymbolMetadata) {
 // lexical binding only. sourcePath names the canonical source owner; resolution
 // can use declarationPath in its caller-provided closure for relocated outputs.
 func ParseDeclarationSymbolMetadata(text, sourcePath, declarationPath string, resolve SymbolResolver) SymbolMetadata {
-	file := parser.ParseSourceFile(ast.SourceFileParseOptions{FileName: tspath.RootedFilePath(declarationPath), PathKey: tspath.PathKey(declarationPath)}, text, core.ScriptKindTS)
+	file := parser.ParseSourceFile(ast.SourceFileParseOptions{FileName: tspath.RootedFilePathFromNormalized(declarationPath), PathKey: tspath.PathKeyFromCanonical(declarationPath)}, text, core.ScriptKindTS)
 	p := newSymbolMetadataParser(file, sourcePath, resolve)
 	m := SymbolMetadata{Signatures: map[string]string{}, Dependencies: map[string][]SymbolReference{}, Aliases: map[string][]SymbolReference{}, AugmentationExports: map[string][]string{}}
 	local := map[string][]*ast.Node{}

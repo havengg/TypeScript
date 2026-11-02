@@ -191,6 +191,7 @@ export const make = (): Box => ({ value: "ok" });
 		return incrementalProgram, times
 	}
 	oldProgram, _ := compile(nil)
+	coldNestedEmitCalls := clock.NestedEmitCalls()
 	if err := sys.fs.WriteFile("/project/hub.ts", files["/project/hub.ts"]+"\n// comment only change\n"); err != nil {
 		t.Fatal(err)
 	}
@@ -199,10 +200,17 @@ export const make = (): Box => ({ value: "ok" });
 	if times.checkTime != 0 {
 		t.Fatalf("check time = %v, want 0", times.checkTime)
 	}
-	if times.emitTime != 2*time.Second {
-		t.Fatalf("emit time = %v, want %v", times.emitTime, 2*time.Second)
+	// Symbol mode needs only the changed hub's declaration. Both walks must
+	// attribute the entire nested emit duration to emit time rather than check time.
+	wantNestedEmits := 2
+	if incremental.SymbolGrainEnabled() {
+		wantNestedEmits = 1
 	}
-	if calls := clock.NestedEmitCalls(); calls != 4 {
-		t.Fatalf("nested clock calls = %d, want 4", calls)
+	wantEmitTime := time.Duration(wantNestedEmits) * time.Second
+	if times.emitTime != wantEmitTime {
+		t.Fatalf("emit time = %v, want %v", times.emitTime, wantEmitTime)
+	}
+	if calls, want := clock.NestedEmitCalls()-coldNestedEmitCalls, 2*wantNestedEmits; calls != want {
+		t.Fatalf("incremental nested clock calls = %d, want %d", calls, want)
 	}
 }

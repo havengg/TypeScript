@@ -108,6 +108,12 @@ func (h *affectedFilesHandler) updateShapeSignature(file *ast.SourceFile, useFil
 		defer existing.mu.Unlock()
 		return false
 	}
+	// A signature update can take a version-only or global-scope shortcut.
+	// Do not retain export metadata from the previous program if that path
+	// does not produce a declaration. Capture or ensure will rebuild it.
+	if SymbolGrainEnabled() {
+		h.program.snapshot.symbolMetadata.Delete(file.PathKey())
+	}
 
 	info, _ := h.program.snapshot.fileInfos.Load(file.PathKey())
 	prevSignature := info.signature

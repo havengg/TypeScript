@@ -1,16 +1,18 @@
 package incremental
 
 import (
-	"github.com/microsoft/TypeScript/tsc/internal/compiler"
-	"github.com/microsoft/TypeScript/tsc/internal/core"
-	"github.com/microsoft/TypeScript/tsc/internal/tspath"
 	"maps"
 	"strings"
 	"testing"
+
+	"github.com/microsoft/TypeScript/tsc/internal/compiler"
+	"github.com/microsoft/TypeScript/tsc/internal/core"
+	"github.com/microsoft/TypeScript/tsc/internal/tspath"
 )
 
 func TestSymbolWalkCompilerCompatibility(t *testing.T) {
 	t.Setenv("TS_SYMBOL_GRAIN", "1")
+	//nolint:paralleltest // Subtests inherit the parent's process-wide t.Setenv setting.
 	for _, test := range []struct {
 		name, before, after, consumer string
 		decorators                    bool
